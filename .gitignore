@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+.env
+
+# IDE
+.idea/
+.vscode/
+.ipynb_checkpoints/
+
+# Data and outputs
+data/raw/
+data/processed/
+data/cache/
+data_analysis/results/
+outputs/
+log/
+logs/
+log_tensorboard/
+nohup.out
+
+# Large artifacts
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.npy
+*.npz
+*.parquet
+*.zip
+*.tar
+*.gz
+
+# Local tooling
+.claude/
+references/**/.venv/
+
+# OS
+.DS_Store

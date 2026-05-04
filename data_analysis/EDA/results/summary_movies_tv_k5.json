@@ -1,0 +1,13 @@
+{
+  "dataset": "Amazon Movies_and_TV",
+  "k": 5,
+  "raw_jsonl_lines": 17328314,
+  "parsed_json_lines": 17328314,
+  "valid_interactions_before_kcore": 17328314,
+  "users_before_kcore": 6503429,
+  "items_before_kcore": 747764,
+  "valid_interactions_after_kcore": 7569068,
+  "users_after_kcore": 666889,
+  "items_after_kcore": 200151,
+  "interaction_retention_pct": 43.68
+}

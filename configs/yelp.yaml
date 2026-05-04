@@ -1,0 +1,4 @@
+dataset:
+  name: yelp
+  processed_dir: data/processed/yelp
+
