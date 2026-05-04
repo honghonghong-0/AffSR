@@ -12,8 +12,8 @@ from collections import defaultdict, Counter
 from pathlib import Path
 
 # ── 경로 설정 ──────────────────────────────────────────────────────────────────
-DATA_PATH = "/home/seohyeon/.00_project/Recsys_02_AffDrift/data/raw/CDs_and_Vinyl.jsonl"
-OUTPUT_DIR = Path("/home/seohyeon/.00_project/Recsys_02_AffDrift/data")
+DATA_PATH = str(Path(__file__).parent.parent / "data/raw/CDs_and_Vinyl.jsonl")
+OUTPUT_DIR = Path(__file__).parent.parent / "data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── 데이터 로드 ────────────────────────────────────────────────────────────────

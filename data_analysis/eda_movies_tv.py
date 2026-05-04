@@ -11,7 +11,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path("/home/seohyeon/.00_project/Recsys_02_AffDrift/data/raw/Movies_and_TV.jsonl"),
+        default=Path(__file__).parent.parent / "data/raw/Movies_and_TV.jsonl",
         help="Path to Movies_and_TV.jsonl",
     )
     parser.add_argument(
