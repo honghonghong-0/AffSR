@@ -11,12 +11,12 @@ import matplotlib.font_manager as fm
 from collections import defaultdict, Counter
 from pathlib import Path
 
-# ── 경로 설정 ──────────────────────────────────────────────────────────────────
+# ── Path configuration ────────────────────────────────────────────────────────
 DATA_PATH = str(Path(__file__).parent.parent / "data/raw/CDs_and_Vinyl.jsonl")
 OUTPUT_DIR = Path(__file__).parent.parent / "data"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── 데이터 로드 ────────────────────────────────────────────────────────────────
+# ── Data loading ──────────────────────────────────────────────────────────────
 print("=" * 60)
 print("Loading data...")
 print("=" * 60)
@@ -40,7 +40,7 @@ print(f"Total records loaded: {len(df):,}\n")
 print("Columns:", df.columns.tolist())
 print()
 
-# ── 컬럼명 자동 감지 (Amazon 리뷰 데이터 버전별 대응) ─────────────────────────
+# ── Auto-detect column names (handles different Amazon review dataset versions) ──
 # user_id
 user_col = next((c for c in ["user_id", "reviewerID", "reviewer_id"] if c in df.columns), None)
 # item_id
@@ -56,7 +56,7 @@ print(f"text_col  : {text_col}")
 print(f"time_col  : {time_col}")
 print()
 
-# ── 1. 유저 / 아이템 / 상호작용 수 ────────────────────────────────────────────
+# ── 1. Users / Items / Interactions ──────────────────────────────────────────
 print("=" * 60)
 print("1. Basic Statistics")
 print("=" * 60)
@@ -74,7 +74,7 @@ if isinstance(n_users, int) and isinstance(n_items, int):
     print(f"  Sparsity       : {sparsity:.6f} ({sparsity*100:.4f}%)")
 print()
 
-# ── 2. 시퀀스 길이 분포 ────────────────────────────────────────────────────────
+# ── 2. Sequence length distribution ──────────────────────────────────────────
 print("=" * 60)
 print("2. Sequence Length Distribution (interactions per user)")
 print("=" * 60)
@@ -88,7 +88,7 @@ if user_col:
     print(f"  Users with >= 20 interactions: {(seq_lengths >= 20).sum():,} ({(seq_lengths >= 20).mean()*100:.1f}%)")
     print()
 
-# ── 3. 리뷰 텍스트 존재 비율 ──────────────────────────────────────────────────
+# ── 3. Review text existence ──────────────────────────────────────────────────
 print("=" * 60)
 print("3. Review Text Existence")
 print("=" * 60)
@@ -103,7 +103,7 @@ else:
     print("  ⚠ No review text column found.")
 print()
 
-# ── 4. 리뷰당 평균 길이 ───────────────────────────────────────────────────────
+# ── 4. Average review length ──────────────────────────────────────────────────
 print("=" * 60)
 print("4. Review Text Length (characters)")
 print("=" * 60)
@@ -131,7 +131,7 @@ else:
     print("  ⚠ No review text column found.")
 print()
 
-# ── 5. 시각화 ─────────────────────────────────────────────────────────────────
+# ── 5. Visualization ──────────────────────────────────────────────────────────
 print("=" * 60)
 print("5. Saving plots...")
 print("=" * 60)
@@ -139,7 +139,7 @@ print("=" * 60)
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 fig.suptitle("CDs and Vinyl - EDA", fontsize=14, fontweight="bold")
 
-# (a) 시퀀스 길이 분포
+# (a) sequence length distribution
 if user_col:
     ax = axes[0]
     clipped = seq_lengths.clip(upper=50)
@@ -150,7 +150,7 @@ if user_col:
     ax.axvline(seq_lengths.mean(), color="red", linestyle="--", label=f"mean={seq_lengths.mean():.1f}")
     ax.legend()
 
-# (b) 리뷰 텍스트 존재 비율 파이차트
+# (b) review text existence pie chart
 if text_col:
     ax = axes[1]
     ax.pie(
@@ -162,7 +162,7 @@ if text_col:
     )
     ax.set_title("Review Text Existence")
 
-# (c) 리뷰 단어 수 분포
+# (c) review word count distribution
 if text_col:
     ax = axes[2]
     clipped_words = word_lengths.clip(upper=300)

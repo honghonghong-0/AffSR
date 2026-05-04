@@ -1,21 +1,21 @@
 """
-검증 D-2: SASRec + VA simple ensemble
+Verification D-2: SASRec + VA simple ensemble
 
-학습 없이 후처리로 SASRec 점수에 VA 유사도를 가중합산.
-α sweep해서 어떤 α에서 baseline을 넘는지 확인.
+Post-hoc combination of SASRec scores with VA similarity (no training).
+Sweep α to determine at which α the model outperforms the baseline.
 
 score_final = sasrec_score + α · va_similarity
 
-정규화: 두 점수를 같은 스케일로 z-score 정규화 후 결합
+Normalization: combine after z-score normalizing both scores to the same scale.
 
-기준:
-  α = 0.0: SASRec baseline (참조)
-  α > 0:  VA 보조 신호 추가
+Reference points:
+  α = 0.0: SASRec baseline
+  α > 0:   VA auxiliary signal added
 
-판정:
-  Pattern 1 (VA 도움): 중간 α에서 peak → AffSR 방향 유지
-  Pattern 2 (VA 손해): α↑ → 단조 감소
-  Pattern 3 (무관):    α 바뀌어도 거의 동일
+Interpretation patterns:
+  Pattern 1 (VA helps): peak at intermediate α → proceed with AffSR direction
+  Pattern 2 (VA hurts): monotone decrease as α↑
+  Pattern 3 (no effect): stable regardless of α
 """
 
 import argparse
@@ -43,7 +43,7 @@ def evaluate_ensemble(
     if alphas is None:
         alphas = [0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0]
 
-    # ── 데이터 로드 ─────────────────────────────────────────────────
+    # ── Data loading ─────────────────────────────────────────────────
     print(f"[Load] Dataset: {data_dir} / {split}")
     dataset = AffSRDataset(
         str(data_dir), split=split, max_seq_len=50, num_neg=1, seed=42,
@@ -57,22 +57,22 @@ def evaluate_ensemble(
             all_va[idx] = torch.from_numpy(va)
     all_va = all_va.to(device)
 
-    # ── SASRec 모델 로드 (baseline_only) ────────────────────────────
+    # ── Load SASRec model (baseline_only) ────────────────────────────
     print(f"[Load] SASRec checkpoint: {sasrec_ckpt_path}")
     ckpt = torch.load(sasrec_ckpt_path, map_location=device, weights_only=False)
 
-    # baseline_only 모델로 복원 (체크포인트 구조가 v8 full이어서 full 로드 후 baseline 모드로 사용)
+    # restore as baseline_only (checkpoint structure is v8 full — load full then use baseline mode)
     model = AffSR(
         num_items=num_items,
         d_model=64, n_heads=2, n_layers=2, max_seq_len=50,
         K=4, dropout=0.5, tau=1.0,
         baseline_only=True,
     ).to(device)
-    # baseline checkpoint는 baseline_only=True로 학습됐으므로 동일 구조
+    # baseline checkpoint was trained with baseline_only=True, so structure matches
     try:
         model.load_state_dict(ckpt["model"], strict=False)
     except Exception as e:
-        print(f"[Warning] strict=False로 로드: {e}")
+        print(f"[Warning] Loading with strict=False: {e}")
     model.eval()
 
     # ── Loader ──────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ def evaluate_ensemble(
         dataset, batch_size=batch_size, shuffle=False, num_workers=0,
     )
 
-    # ── 두 점수 수집 ────────────────────────────────────────────────
+    # ── Collect both scores ─────────────────────────────────────────
     results = {alpha: {"recalls": {10: [], 20: []}, "ndcgs": {10: [], 20: []}}
                for alpha in alphas}
 
@@ -95,23 +95,23 @@ def evaluate_ensemble(
             B = item_seq.size(0)
             N = num_items + 1
 
-            # SASRec 점수 (B, N)
+            # SASRec scores (B, N)
             sasrec_scores = model.predict(
                 item_seq, seq_mask, a_n, a_bar_u, idm, all_va,
             )
 
-            # VA 유사도 점수 (B, N)
-            # user r_u_va = 시퀀스 VA 평균
+            # VA similarity scores (B, N)
+            # user r_u_va = mean of sequence VA
             va_seq = batch["va_seq"].to(device)  # (B, L, 2)
             mask_float = seq_mask.float().unsqueeze(-1)  # (B, L, 1)
             r_u_va = (va_seq * mask_float).sum(dim=1) / mask_float.sum(dim=1).clamp(min=1)  # (B, 2)
-            # 거리 계산 (B, N)
+            # distance (B, N)
             dists = torch.norm(
                 r_u_va.unsqueeze(1) - all_va.unsqueeze(0), dim=-1,
             )
-            va_scores = -dists  # 가까울수록 높음
+            va_scores = -dists  # higher score for closer items
 
-            # 본 아이템 마스킹 (두 점수 동일 위치에 -inf)
+            # mask seen items (both scores set to -inf at same positions)
             sasrec_scores[:, 0] = float("-inf")
             va_scores[:, 0] = float("-inf")
             for b in range(B):
@@ -119,7 +119,7 @@ def evaluate_ensemble(
                 sasrec_scores[b, seen] = float("-inf")
                 va_scores[b, seen] = float("-inf")
 
-            # 정규화: 각 유저별 z-score (-inf 제외)
+            # z-score normalization per user (excluding -inf)
             def zscore_per_row(s):
                 out = torch.full_like(s, float("-inf"))
                 for i in range(s.size(0)):
@@ -153,9 +153,9 @@ def evaluate_ensemble(
                         ndcg_vec[b_idx] = 1.0 / torch.log2(p_idx + 2)
                     results[alpha]["ndcgs"][k].extend(ndcg_vec.cpu().tolist())
 
-    # ── 결과 ─────────────────────────────────────────────────────────
+    # ── Results ──────────────────────────────────────────────────────
     print(f"\n{'='*72}")
-    print(f"검증 D-2 결과 ({split})")
+    print(f"Verification D-2 Results ({split})")
     print(f"{'='*72}")
     print(f"{'α':>6}  {'R@10':>8}  {'N@10':>8}  {'R@20':>8}  {'N@20':>8}  Δ(R@10 vs α=0)")
     print("-" * 72)

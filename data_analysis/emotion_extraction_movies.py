@@ -1,18 +1,18 @@
 """
 eda_idm_adm_v4.py
 =================
-카테고리 기반 IDM vs ADM 상관 분석 — v4
+Category-based IDM vs ADM correlation analysis — v4
 
-v3 대비 수정사항:
-  [필수] EXCLUDE_CATS 필터 추가 — "Movies & TV", "Prime Video" 등 데이터셋명 카테고리 제거
-         → IDM 분포 왜곡 방지 (IDURL sequential_dataset.py:157 반영)
-  [선택] repeat item 처리 — target이 과거 시퀀스에 이미 등장하면 IDM=0으로 처리
-         (IDURL line:151 반영, EDA에선 영향 작지만 일관성을 위해 추가)
-  [참고] IDQ quantization은 EDA에선 연속값이 더 적합 → 미적용
-         모델 피처로 쓸 때는 별도 quantize 필요 (주석으로 명시)
+Changes from v3:
+  [Required] Added EXCLUDE_CATS filter — removes dataset-name categories such as "Movies & TV", "Prime Video"
+             → Prevents artificial skewing of IDM distribution (reflects IDURL sequential_dataset.py:157)
+  [Optional] Repeat item handling — if the target has already appeared in the past sequence, set IDM=0
+             (reflects IDURL line:151; minor effect in EDA but added for consistency)
+  [Note]     IDQ quantization is not applied in EDA — continuous values are more appropriate here
+             When used as a model feature, separate quantization is required (noted in comments)
 
-파일 위치: preprocessing/eda_idm_adm_v4.py
-사용법:
+File location: preprocessing/eda_idm_adm_v4.py
+Usage:
   python preprocessing/eda_idm_adm_v4.py \
       --review_path  data/raw/Movies_and_TV.jsonl \
       --meta_path    data/raw/meta_Movies_and_TV.jsonl \
@@ -38,12 +38,12 @@ from tqdm import tqdm
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 상수
+# Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-# [핵심 수정] IDURL sequential_dataset.py:157 반영
-# 데이터셋명·최상위 카테고리는 IDM 계산에서 제외
-# → 이 카테고리들이 포함되면 거의 모든 아이템 쌍에서 교집합이 생겨 IDM이 0 쪽으로 인위적 쏠림
+# [Key fix] Reflects IDURL sequential_dataset.py:157
+# Dataset-name and top-level categories are excluded from IDM computation
+# → Including these categories creates intersection for almost all item pairs, artificially pushing IDM toward 0
 EXCLUDE_CATS = {
     "Movies & TV",
     "Prime Video",
@@ -95,11 +95,11 @@ def get_quadrant(v, a):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. 메타데이터 로딩
+# 1. Metadata loading
 # ─────────────────────────────────────────────────────────────────────────────
 def load_item_categories(meta_path: str) -> dict:
-    """parent_asin → frozenset(categories) — EXCLUDE_CATS 제거 후 저장"""
-    print(f"[Meta] 로딩: {meta_path}")
+    """parent_asin → frozenset(categories) — stored after removing EXCLUDE_CATS"""
+    print(f"[Meta] Loading: {meta_path}")
     asin2cats = {}
     with open(meta_path, "r", encoding="utf-8") as f:
         for line in tqdm(f, desc="Loading meta", mininterval=5):
@@ -109,7 +109,7 @@ def load_item_categories(meta_path: str) -> dict:
                 continue
             asin = obj.get("parent_asin", "")
             raw  = obj.get("categories") or []
-            # EXCLUDE_CATS 필터 적용
+            # Apply EXCLUDE_CATS filter
             cats = frozenset(
                 c.strip() for c in raw
                 if c.strip() and c.strip() not in EXCLUDE_CATS
@@ -117,18 +117,18 @@ def load_item_categories(meta_path: str) -> dict:
             asin2cats[asin] = cats
 
     n_with = sum(1 for v in asin2cats.values() if len(v) > 0)
-    print(f"[Meta] 아이템 {len(asin2cats):,}개 | "
-          f"유효 categories({'/'.join(list(EXCLUDE_CATS)[:2])}... 제외) 있음: "
+    print(f"[Meta] {len(asin2cats):,} items | "
+          f"with valid categories (excluding {'/'.join(list(EXCLUDE_CATS)[:2])}...): "
           f"{n_with:,} ({n_with/len(asin2cats)*100:.1f}%)")
     return asin2cats
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. 리뷰 로딩 (유저 중심)
+# 2. Review loading (user-centric)
 # ─────────────────────────────────────────────────────────────────────────────
 def load_user_sequences(review_path, asin2cats, sample_users=200,
                         min_seq_len=5, seed=42):
-    print(f"[Load] 리뷰 스캔: {review_path}")
+    print(f"[Load] Scanning reviews: {review_path}")
     rng = random.Random(seed)
     user_reviews = defaultdict(list)
 
@@ -145,7 +145,7 @@ def load_user_sequences(review_path, asin2cats, sample_users=200,
             asin = obj.get("parent_asin", "")
             if not uid or not asin:
                 continue
-            # categories 없어도 일단 포함 (IDM 계산 시 처리)
+            # Include even if categories are missing (handled during IDM computation)
             user_reviews[uid].append({
                 "user_id":     uid,
                 "parent_asin": asin,
@@ -156,7 +156,7 @@ def load_user_sequences(review_path, asin2cats, sample_users=200,
             })
 
     eligible = [u for u, r in user_reviews.items() if len(r) >= min_seq_len]
-    print(f"[Load] 전체 유저 {len(user_reviews):,} | "
+    print(f"[Load] Total users: {len(user_reviews):,} | "
           f"seq≥{min_seq_len}: {len(eligible):,}")
 
     n = min(sample_users, len(eligible))
@@ -165,17 +165,17 @@ def load_user_sequences(review_path, asin2cats, sample_users=200,
 
     df = pd.DataFrame(records).sort_values(
         ["user_id", "timestamp"]).reset_index(drop=True)
-    print(f"[Load] 샘플 {n}명 | 총 리뷰 {len(df):,}개")
+    print(f"[Load] Sampled {n} users | total reviews: {len(df):,}")
     return df
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. VA 획득 (캐시 우선)
+# 3. VA acquisition (cache-first)
 # ─────────────────────────────────────────────────────────────────────────────
 def get_va_values(df, emotion_dir, batch_size=32, device="cpu"):
     cache = Path(emotion_dir) / "va_results.csv"
     if cache.exists():
-        print(f"[VA] 캐시 로드: {cache}")
+        print(f"[VA] Loading from cache: {cache}")
         va_df  = pd.read_csv(cache)
         merged = df.merge(
             va_df[["user_id", "timestamp", "valence", "arousal"]],
@@ -183,26 +183,26 @@ def get_va_values(df, emotion_dir, batch_size=32, device="cpu"):
         )
         missing = merged["valence"].isna()
         if missing.sum() > 0:
-            print(f"[VA] 캐시 미매칭 {missing.sum()}개 → 추론")
+            print(f"[VA] {missing.sum()} cache misses → running inference")
             v_new, a_new = _infer_goemotions(
                 df[missing]["text"].tolist(), batch_size, device)
             merged.loc[missing, "valence"] = v_new
             merged.loc[missing, "arousal"] = a_new
         return merged["valence"].values, merged["arousal"].values
 
-    print("[VA] 캐시 없음 → 전체 추론")
+    print("[VA] No cache found → running full inference")
     v, a = _infer_goemotions(df["text"].tolist(), batch_size, device)
     save = df[["user_id", "timestamp"]].copy()
     save["valence"], save["arousal"] = v, a
     os.makedirs(emotion_dir, exist_ok=True)
     save.to_csv(cache, index=False)
-    print(f"[VA] 저장: {cache}")
+    print(f"[VA] Saved: {cache}")
     return v, a
 
 
 def _infer_goemotions(texts, batch_size, device, top_k=5):
     from transformers import pipeline
-    print(f"[GoEmotions] 추론 {len(texts):,}개...")
+    print(f"[GoEmotions] Running inference on {len(texts):,} texts...")
     clf = pipeline(
         "text-classification",
         model="SamLowe/roberta-base-go_emotions",
@@ -223,8 +223,8 @@ def _infer_goemotions(texts, batch_size, device, top_k=5):
                 idx = label2idx.get(p["label"])
                 if idx is not None:
                     mtx[bi, idx] = p["score"]
-        mtx[:, NEUTRAL_IDX] = 0.0          # neutral 제외
-        if top_k < 27:                      # top-K 마스킹
+        mtx[:, NEUTRAL_IDX] = 0.0          # exclude neutral
+        if top_k < 27:                      # top-K masking
             for i in range(len(mtx)):
                 row = mtx[i].copy()
                 top_idx = np.argsort(row)[::-1][:top_k]
@@ -239,20 +239,20 @@ def _infer_goemotions(texts, batch_size, device, top_k=5):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. 카테고리 기반 IDM (IDURL 수식 + 수정사항 반영)
+# 4. Category-based IDM (IDURL formula + applied fixes)
 # ─────────────────────────────────────────────────────────────────────────────
 def compute_category_idm(df: pd.DataFrame):
     """
-    IDURL 수식:
+    IDURL formula:
       IDM = 1 - |cats(target) ∩ ∪cats(seq)| / |cats(target)|
 
-    수정사항 반영:
-      - EXCLUDE_CATS: load_item_categories()에서 이미 제거됨
-      - repeat item: target이 seq에 이미 등장하면 IDM=0 (IDURL line:151)
-      - cats(target) 비어있으면 해당 유저 skip
+    Applied fixes:
+      - EXCLUDE_CATS: already removed in load_item_categories()
+      - repeat item: if target already appears in seq, set IDM=0 (IDURL line:151)
+      - if cats(target) is empty, skip that user
 
-    NOTE: IDQ quantization (1~4 이산화)은 여기서 안 함 — EDA엔 연속값이 적합.
-          모델 피처로 쓸 때는 아래 quantize_idm() 함수 사용.
+    NOTE: IDQ quantization (discretization into 1~4) is not applied here — continuous values are preferred for EDA.
+          Use the quantize_idm() function below when preparing model features.
     """
     idm_list, uid_list = [], []
 
@@ -269,11 +269,11 @@ def compute_category_idm(df: pd.DataFrame):
         seq_asins   = asins[:-1]
         seq_cats    = set().union(*cats[:-1]) if len(cats) > 1 else set()
 
-        # target categories 없으면 skip
+        # skip if target has no categories
         if len(target_cats) == 0:
             continue
 
-        # repeat item 처리 (IDURL line:151)
+        # repeat item handling (IDURL line:151)
         if target_asin in seq_asins:
             idm_list.append(0.0)
             uid_list.append(uid)
@@ -289,12 +289,12 @@ def compute_category_idm(df: pd.DataFrame):
 
 def quantize_idm(idm_arr: np.ndarray, n_bins: int = 4) -> np.ndarray:
     """
-    IDURL IDQ quantization (모델 피처용, EDA에선 미사용):
+    IDURL IDQ quantization (for model features; not used in EDA):
       same_ratio = 1 - IDM
-      1.0        → degree 1  (완전 동일)
+      1.0        → degree 1  (completely identical)
       0.5~1.0    → degree 2
       0.0~0.5    → degree 3
-      0.0        → degree 4  (완전 새 카테고리)
+      0.0        → degree 4  (completely new category)
     """
     same = 1.0 - idm_arr
     deg  = np.where(same == 1.0, 1,
@@ -304,7 +304,7 @@ def quantize_idm(idm_arr: np.ndarray, n_bins: int = 4) -> np.ndarray:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. ADM
+# 5. ADM computation
 # ─────────────────────────────────────────────────────────────────────────────
 def compute_adm(df, valence, arousal, valid_uids):
     df = df.copy()
@@ -324,7 +324,7 @@ def compute_adm(df, valence, arousal, valid_uids):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. 시각화
+# 6. Visualization
 # ─────────────────────────────────────────────────────────────────────────────
 def plot_idm_dist(idm, out_path):
     vals = idm[np.isfinite(idm)]
@@ -333,7 +333,7 @@ def plot_idm_dist(idm, out_path):
             edgecolor="white", alpha=0.85)
     ax.axvline(vals.mean(), color="#E85252", lw=1.5, ls="--",
                label=f"Mean = {vals.mean():.3f}")
-    # quantize 경계선 표시
+    # show quantize boundary lines
     for thr, lbl in [(0.0, "deg1"), (0.5, "deg2/3"), (1.0, "deg4")]:
         ax.axvline(thr, color="gray", lw=0.8, ls=":")
     ax.set_xlabel("IDM  (category-based, EXCLUDE_CATS applied)", fontsize=10)
@@ -344,7 +344,7 @@ def plot_idm_dist(idm, out_path):
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[Plot] IDM dist → {out_path}")
-    # 분포 요약 출력
+    # print distribution summary
     print(f"       IDM=0 (repeat or full overlap): {(vals==0).mean()*100:.1f}%")
     print(f"       IDM=1 (completely new cats):     {(vals==1).mean()*100:.1f}%")
     print(f"       IDM mean={vals.mean():.4f}  std={vals.std():.4f}")
@@ -356,7 +356,7 @@ def plot_idm_adm_corr(idm, adm, out_path):
     n    = len(x)
 
     if n < 10:
-        print(f"[⚠️] 유효 샘플 {n}개 부족.")
+        print(f"[⚠️] Insufficient valid samples: {n}.")
         return None, None
 
     pr, pp = pearsonr(x, y)
@@ -385,8 +385,8 @@ def plot_idm_adm_corr(idm, adm, out_path):
     else:
         msg   = (f"⚠️   r = {pr:.3f}  ≥  0.3\n"
                  f"→ Correlation exists.\n"
-                 f"   sample_users 늘리거나\n"
-                 f"   Beauty/Sports 데이터 사용 권장")
+                 f"   Consider increasing sample_users\n"
+                 f"   or using Beauty/Sports data")
         color = "darkorange"
 
     ax.text(0.03, 0.97, msg, transform=ax.transAxes, fontsize=8.5, va="top",
@@ -401,7 +401,7 @@ def plot_idm_adm_corr(idm, adm, out_path):
 
 
 def plot_idm0_adm_high(idm, adm, out_path, idm_thr=0.1, adm_thr=0.1):
-    """논문 핵심 motivation figure: IDM≈0인데 ADM>0인 비율"""
+    """Key motivation figure for the paper: proportion of IDM≈0 cases where ADM>0"""
     idm_zero = idm <= idm_thr
     n_zero   = idm_zero.sum()
     n_high   = (adm[idm_zero] > adm_thr).sum()
@@ -439,12 +439,12 @@ def plot_idm0_adm_high(idm, adm, out_path, idm_thr=0.1, adm_thr=0.1):
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"[Plot] IDM≈0 & ADM>0 → {out_path}")
-    print(f"       IDM≤{idm_thr}: {n_zero}명 중 ADM>{adm_thr}: {n_high}명 ({ratio:.1f}%)")
+    print(f"       IDM≤{idm_thr}: {n_zero} users, ADM>{adm_thr}: {n_high} ({ratio:.1f}%)")
     return ratio
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 메인
+# Main
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -466,10 +466,10 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     p = lambda name: os.path.join(args.output_dir, name)
 
-    # 1. 메타 로딩 (EXCLUDE_CATS 적용)
+    # 1. Load metadata (with EXCLUDE_CATS applied)
     asin2cats = load_item_categories(args.meta_path)
 
-    # 2. 리뷰 로딩
+    # 2. Load reviews
     df = load_user_sequences(
         args.review_path, asin2cats,
         sample_users=args.sample_users,
@@ -477,25 +477,25 @@ def main():
         seed=args.seed,
     )
 
-    # 3. VA 값
+    # 3. VA values
     valence, arousal = get_va_values(
         df, args.emotion_dir, args.batch_size, args.device)
 
-    # 4. IDM (카테고리 기반 + EXCLUDE_CATS + repeat item)
-    print("\n[IDM] 계산 중...")
+    # 4. IDM (category-based + EXCLUDE_CATS + repeat item)
+    print("\n[IDM] Computing...")
     idm_vals, valid_uids = compute_category_idm(df)
-    print(f"[IDM] 유효 유저: {len(idm_vals)}명")
+    print(f"[IDM] Valid users: {len(idm_vals)}")
     plot_idm_dist(idm_vals, p("idm_dist_v4.png"))
 
-    # 5. ADM
+    # 5. ADM computation
     adm_vals = compute_adm(df, valence, arousal, valid_uids)
     print(f"[ADM] mean={np.nanmean(adm_vals):.4f}  std={np.nanstd(adm_vals):.4f}")
 
-    # 6. 상관 분석 + motivation figure
+    # 6. Correlation analysis + motivation figure
     pr, sr = plot_idm_adm_corr(idm_vals, adm_vals, p("idm_adm_corr_v4.png"))
     ratio  = plot_idm0_adm_high(idm_vals, adm_vals, p("idm0_adm_high_v4.png"))
 
-    # 7. 요약
+    # 7. Summary
     summary = {
         "version":              "v4",
         "idm_type":             "category-based (EXCLUDE_CATS + repeat_item)",

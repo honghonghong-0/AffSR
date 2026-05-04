@@ -1,24 +1,24 @@
 """
-eda_idm_adm_v5.py
+eda_idm_adm.py
 =================
-ADM 분해 검증 (drift vs congruence) — sliding window 단위
+ADM decomposition verification (drift vs congruence) — sliding window
 
-v4와의 차이:
-  - 유저당 1개 → 모든 sliding window 쌍
+Key differences from v4:
+  - One per user → all sliding window pairs
   - Pearson r → KS test + Mutual Information
-  - ADM의 두 항을 분리해서 IDM과의 관계 따로 분석 ← 핵심
+  - Decompose ADM into two terms and analyze each term's relationship with IDM  ← key
 
-사용법:
-    python preprocessing/eda_idm_adm_v5.py \
+Usage:
+    python preprocessing/eda_idm_adm.py \
         --sequences data/processed/cds/sequences.pkl \
         --item_va   data/processed/cds/item_va.json \
         --item_cats data/processed/cds/item_cats.json \
         --output_dir data_analysis/results/cds_v5 \
         --max_pairs 100000
 
-기대 결과:
-  - I(IDM; drift) > I(IDM; congruence) → drift는 IDM과 중복
-  - 즉 v9는 congruence term만 써야 함 (정보 효율)
+Expected results:
+  - I(IDM; drift) > I(IDM; congruence) → drift term overlaps with IDM
+  - Thus only the congruence term should be used (information efficiency)
 """
 
 import argparse
@@ -58,7 +58,7 @@ def compute_pairs(sequences, item_va, item_cats, min_seq_len=3, max_pairs=100000
             try:
                 target_v, target_a = target[2], target[3]
             except (IndexError, TypeError):
-                # fallback: item_va에서 조회
+                # fallback: look up from item_va
                 t_entry = item_va.get(str(target_item))
                 if t_entry is None:
                     continue
@@ -117,7 +117,7 @@ def compute_pairs(sequences, item_va, item_cats, min_seq_len=3, max_pairs=100000
             })
 
             if len(pairs) >= max_pairs:
-                print(f"[Build] max_pairs={max_pairs} 도달")
+                print(f"[Build] max_pairs={max_pairs} reached")
                 return pairs
 
     print(f"[Build] {len(pairs):,} pairs / skip_short={n_skip_short}, skip_no_cat={n_skip_no_cat}")
@@ -132,7 +132,7 @@ def analyze(pairs, output_dir):
     adm_drift = np.array([p["adm_drift"] for p in pairs])
     adm_cong = np.array([p["adm_congruence"] for p in pairs])
 
-    print(f"\n=== 기본 통계 ===")
+    print(f"\n=== Basic Statistics ===")
     print(f"n = {len(pairs):,}")
     print(f"IDM=0: {(idm==0).mean()*100:.1f}%, IDM=1: {(idm==1).mean()*100:.1f}%")
 
@@ -149,7 +149,7 @@ def analyze(pairs, output_dir):
             "pct": float(mask.mean() * 100),
             "adm_mean": float(adm[mask].mean()) if mask.sum() > 0 else None,
         })
-    print(f"\n=== Bin 통계 ===")
+    print(f"\n=== Bin Statistics ===")
     for s in bin_stats:
         print(f"  {s['bin']:12} n={s['n']:6,} ({s['pct']:5.1f}%)  ADM={s['adm_mean']}")
 
@@ -184,7 +184,7 @@ def analyze(pairs, output_dir):
         print(f"\n=== Kruskal-Wallis: H={kw_stat:.2f}, p={kw_p:.2e} ===")
 
     # MI
-    print(f"\n=== Mutual Information (핵심!) ===")
+    print(f"\n=== Mutual Information (key!) ===")
     mi_full = mutual_info_regression(idm.reshape(-1, 1), adm, random_state=42)[0]
     np.random.seed(42)
     idm_shuf = np.random.permutation(idm)
@@ -247,7 +247,7 @@ def main():
 
     pairs = compute_pairs(sequences, item_va, item_cats, max_pairs=args.max_pairs)
     if len(pairs) < 100:
-        print(f"[Error] 쌍 부족: {len(pairs)}"); return
+        print(f"[Error] too few pairs: {len(pairs)}"); return
     analyze(pairs, args.output_dir)
 
 

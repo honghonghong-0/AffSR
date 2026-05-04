@@ -1,13 +1,13 @@
 """
 convert_idm.py
 ==============
-idm.pkl 포맷 변환:
-  기존: {user_idx: [idm_1, idm_2, ...]}
-  신규: {(user_idx, target_idx): idm_float}
+Convert idm.pkl format:
+  old: {user_idx: [idm_1, idm_2, ...]}
+  new: {(user_idx, target_idx): idm_float}
 
-compute_idm.py의 skip 로직으로 인한 인덱스 어긋남을 피하기 위해,
-list를 enumerate하지 않고 sequences.pkl + item_cats.json에서 재계산한다.
-결과 값은 compute_idm.py와 동일.
+To avoid index misalignment caused by the skip logic in compute_idm.py,
+we recompute from sequences.pkl + item_cats.json rather than enumerating the list.
+The resulting values are identical to compute_idm.py.
 """
 
 import argparse
@@ -49,7 +49,7 @@ def convert(data_dir: Path, exclude_cats: set | None = None):
             seq_before = [s[0] for s in seq[:i]]
 
             target_cats = item_cats.get(target_item, set())
-            # IDURL 규약: 타겟 카테고리 불명 → 최대 drift (완전히 새로운 관심)
+            # IDURL convention: unknown target category → maximum drift (completely new interest)
             if len(target_cats) == 0:
                 new_idm[(user_idx, target_item)] = 1.0
                 n_empty_max_drift += 1
@@ -71,15 +71,15 @@ def convert(data_dir: Path, exclude_cats: set | None = None):
         pickle.dump(new_idm, f)
 
     vals = list(new_idm.values())
-    print(f"[convert_idm] 저장: {data_dir / 'idm.pkl'}")
-    print(f"  (user, item) 쌍 수: {len(new_idm):,}")
-    print(f"  빈 카테고리→IDM=1  : {n_empty_max_drift:,}")
-    print(f"  IDM 평균/std       : {np.mean(vals):.4f} / {np.std(vals):.4f}")
+    print(f"[convert_idm] Saved: {data_dir / 'idm.pkl'}")
+    print(f"  (user, item) pairs : {len(new_idm):,}")
+    print(f"  empty cat → IDM=1  : {n_empty_max_drift:,}")
+    print(f"  IDM mean/std       : {np.mean(vals):.4f} / {np.std(vals):.4f}")
     print(f"  IDM min/max        : {min(vals):.4f} / {max(vals):.4f}")
-    print(f"  IDM=0 비율         : {sum(1 for v in vals if v < 0.01) / len(vals) * 100:.1f}%")
-    print(f"  IDM=1 비율         : {sum(1 for v in vals if v > 0.99) / len(vals) * 100:.1f}%")
+    print(f"  IDM=0 ratio        : {sum(1 for v in vals if v < 0.01) / len(vals) * 100:.1f}%")
+    print(f"  IDM=1 ratio        : {sum(1 for v in vals if v > 0.99) / len(vals) * 100:.1f}%")
     print()
-    print(f"[sample 10개]")
+    print(f"[sample 10 entries]")
     for k, v in list(new_idm.items())[:10]:
         print(f"  {k}: {v:.4f}")
 

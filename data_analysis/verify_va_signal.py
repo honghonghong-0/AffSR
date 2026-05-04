@@ -1,18 +1,18 @@
 """
-검증 D: VA 공간이 추천 신호를 가지는가?
+Verification D: Does VA space carry a recommendation signal?
 
-방법:
-  각 유저의 시퀀스 VA 평균을 r_u로,
-  아이템 VA와의 거리를 score로 사용 (순수 VA 기반 추천).
+Method:
+  Use the mean of each user's sequence VA as r_u,
+  then score items by distance to their VA (pure VA-based recommendation).
 
   score(u, v) = -‖mean(VA_seq_u) - VA(v)‖₂
 
-  Valid/Test set에서 R@10, N@10, R@20, N@20 측정.
+  Measure R@10, N@10, R@20, N@20 on Valid/Test set.
 
-기준:
+Reference points:
   - Random baseline: R@10 ≈ 10/15024 = 0.000666
   - SASRec baseline test: R@10 = 0.0555
-  - VA-only이 Random보다 명확히 우수해야 AffSR 가정 유지 가능
+  - VA-only must clearly outperform random to support the AffSR assumption
 """
 
 import math
@@ -25,13 +25,13 @@ from tqdm import tqdm
 
 
 def va_only_eval(data_dir: Path, split: str = "valid"):
-    # ── 데이터 로드 ────────────────────────────────────────────────
+    # ── Data loading ───────────────────────────────────────────────
     with open(data_dir / "item_va.json") as f:
         item_va_raw = json.load(f)
     item_va = {}
     for k, v in item_va_raw.items():
         if not k.isdigit():
-            continue  # __meta__ 등 skip
+            continue  # skip __meta__ etc.
         val = v["va"] if isinstance(v, dict) and "va" in v else v
         item_va[int(k)] = np.array(val, dtype=np.float32)
     max_item_idx = max(item_va.keys())
@@ -41,18 +41,18 @@ def va_only_eval(data_dir: Path, split: str = "valid"):
     for k, v in item_va.items():
         all_va[k] = v
     num_items = max_item_idx + 1
-    print(f"[데이터] 아이템 {num_items:,}개")
+    print(f"[Data] Items: {num_items:,}")
 
-    # train sequences (valid/test 타겟 제외)
+    # train sequences (exclude valid/test targets)
     with open(data_dir / "splits" / "train.pkl", "rb") as f:
         sequences = pickle.load(f)
 
     # split
     with open(data_dir / f"splits/{split}.pkl", "rb") as f:
         split_data = pickle.load(f)
-    print(f"[데이터] {split} 샘플 {len(split_data):,}명")
+    print(f"[Data] {split} samples: {len(split_data):,} users")
 
-    # ── 평가 ─────────────────────────────────────────────────────
+    # ── Evaluation ────────────────────────────────────────────────
     recalls = {10: [], 20: [], 100: []}
     ndcgs = {10: [], 20: [], 100: []}
     target_ranks = []
@@ -66,18 +66,18 @@ def va_only_eval(data_dir: Path, split: str = "valid"):
         seq = sequences[user_idx]
         target_idx = target_tuple[0]
 
-        # 시퀀스의 VA 평균
+        # mean VA of sequence
         seq_vas = np.array([all_va[s[0]] for s in seq if 0 < s[0] <= max_item_idx])
         if len(seq_vas) == 0:
             skipped += 1
             continue
         r_u = seq_vas.mean(axis=0)  # (2,)
 
-        # 전체 아이템 거리 계산
+        # distance to all items
         dists = np.linalg.norm(all_va - r_u[None, :], axis=1)  # (N,)
         scores = -dists
 
-        # seen items 마스킹
+        # mask seen items
         seen = set(s[0] for s in seq)
         seen.add(0)  # padding
         for s in seen:
@@ -101,11 +101,11 @@ def va_only_eval(data_dir: Path, split: str = "valid"):
             else:
                 ndcgs[k].append(0.0)
 
-    # ── 결과 ─────────────────────────────────────────────────────
-    print(f"\n[{split} 결과] (n={len(target_ranks):,}, skipped={skipped:,})")
-    print(f"  target rank 평균    : {np.mean(target_ranks):.0f}")
-    print(f"  target rank 중앙값  : {np.median(target_ranks):.0f}")
-    print(f"  target rank p10/p90 : {np.percentile(target_ranks, 10):.0f} / {np.percentile(target_ranks, 90):.0f}")
+    # ── Results ───────────────────────────────────────────────────
+    print(f"\n[{split} results] (n={len(target_ranks):,}, skipped={skipped:,})")
+    print(f"  Target rank mean   : {np.mean(target_ranks):.0f}")
+    print(f"  Target rank median : {np.median(target_ranks):.0f}")
+    print(f"  Target rank p10/p90: {np.percentile(target_ranks, 10):.0f} / {np.percentile(target_ranks, 90):.0f}")
     print(f"\n  Recall@10  : {np.mean(recalls[10]):.4f}  (random={10/num_items:.4f})")
     print(f"  NDCG@10    : {np.mean(ndcgs[10]):.4f}")
     print(f"  Recall@20  : {np.mean(recalls[20]):.4f}  (random={20/num_items:.4f})")
@@ -116,7 +116,7 @@ def va_only_eval(data_dir: Path, split: str = "valid"):
     # Improvement over random
     rand_r10 = 10 / num_items
     actual_r10 = np.mean(recalls[10])
-    print(f"\n  R@10 vs random : {actual_r10/rand_r10:.2f}× (배수)")
+    print(f"\n  R@10 vs random : {actual_r10/rand_r10:.2f}×")
 
     return {
         "R@10": np.mean(recalls[10]),
@@ -135,5 +135,5 @@ if __name__ == "__main__":
     parser.add_argument("--split", default="valid", choices=["valid", "test"])
     args = parser.parse_args()
 
-    print(f"=== 검증 D: VA-only 추천 (score = -‖mean(VA_seq) - VA(item)‖) ===\n")
+    print(f"=== Verification D: VA-only recommendation (score = -‖mean(VA_seq) - VA(item)‖) ===\n")
     va_only_eval(Path(args.data_dir), args.split)

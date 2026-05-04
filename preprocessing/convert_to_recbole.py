@@ -1,12 +1,12 @@
 """
 preprocessing/convert_to_recbole.py
 =====================================
-CDS / Movies 데이터를 RecBole(IDURL) 포맷으로 변환
+Convert CDS / Movies data to RecBole (IDURL) format.
 
-소스: sequences.pkl (VA 필터링 완료된 데이터)
-     → AffSR 학습에 사용된 것과 동일한 유저/아이템 집합 보장
+Source: sequences.pkl (VA-filtered data)
+     → Guarantees the same user/item set used for AffSR training.
 
-출력:
+Output:
   references/IDURL-main/IDURL-main/dataset/
   ├── cds/
   │   ├── cds.inter    (user_id:token  item_id:token  rating:float  timestamp:float)
@@ -15,7 +15,7 @@ CDS / Movies 데이터를 RecBole(IDURL) 포맷으로 변환
       ├── movies.inter
       └── movies.item
 
-사용법:
+Usage:
   python preprocessing/convert_to_recbole.py
 """
 
@@ -30,12 +30,12 @@ IDURL_DATASET_DIR = Path("references/IDURL-main/IDURL-main/dataset")
 
 def build_recbole_data(processed_dir: str, out_dir: Path, name: str):
     """
-    sequences.pkl 기반으로 RecBole .inter / .item 생성.
+    Build RecBole .inter / .item files from sequences.pkl.
     sequences.pkl: {user_idx: [(item_idx, timestamp, v, a, has_va), ...]}
     """
     processed_dir = Path(processed_dir)
 
-    # ── 역방향 맵 구성 ──────────────────────────────────────────────
+    # ── Build reverse maps ──────────────────────────────────────────
     with open(processed_dir / "user_map.json") as f:
         user_map = json.load(f)          # user_id_str → idx
     idx2user = {v: k for k, v in user_map.items()}
@@ -47,11 +47,11 @@ def build_recbole_data(processed_dir: str, out_dir: Path, name: str):
     with open(processed_dir / "item_cats.json") as f:
         item_cats = json.load(f)         # str(idx) → [cat, ...]
 
-    # ── sequences.pkl 로드 ──────────────────────────────────────────
+    # ── Load sequences.pkl ──────────────────────────────────────────
     with open(processed_dir / "sequences.pkl", "rb") as f:
         sequences = pickle.load(f)       # {user_idx: [(item_idx, ts, v, a, ...), ...]}
 
-    # ── .inter 행 생성 ───────────────────────────────────────────────
+    # ── Build .inter rows ───────────────────────────────────────────
     rows = []
     for user_idx, seq in sequences.items():
         user_str = idx2user.get(user_idx)
@@ -74,9 +74,9 @@ def build_recbole_data(processed_dir: str, out_dir: Path, name: str):
     out_dir.mkdir(parents=True, exist_ok=True)
     inter_path = out_dir / f"{name}.inter"
     inter_df.to_csv(inter_path, sep="\t", index=False)
-    print(f"  .inter → {inter_path}  ({len(inter_df):,}행, {inter_df['user_id:token'].nunique():,}명)")
+    print(f"  .inter → {inter_path}  ({len(inter_df):,} rows, {inter_df['user_id:token'].nunique():,} users)")
 
-    # ── .item 생성 ────────────────────────────────────────────────────
+    # ── Build .item ───────────────────────────────────────────────────
     item_rows = []
     for idx, asin in idx2item.items():
         cats = item_cats.get(str(idx), [])
@@ -88,14 +88,14 @@ def build_recbole_data(processed_dir: str, out_dir: Path, name: str):
     item_path = out_dir / f"{name}.item"
     item_df.to_csv(item_path, sep="\t", index=False)
     no_cat = (item_df["categories:token_seq"] == "").sum()
-    print(f"  .item  → {item_path}  ({len(item_df):,}개 아이템, 카테고리 없음: {no_cat}개)")
+    print(f"  .item  → {item_path}  ({len(item_df):,} items, no category: {no_cat})")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CDS
 # ─────────────────────────────────────────────────────────────────────────────
 print("=" * 55)
-print("CDS 변환  (VA-filtered sequences.pkl 기반)")
+print("CDS conversion  (based on VA-filtered sequences.pkl)")
 print("=" * 55)
 build_recbole_data(
     processed_dir="data/processed/cds_v10",
@@ -107,7 +107,7 @@ build_recbole_data(
 # Movies
 # ─────────────────────────────────────────────────────────────────────────────
 print("\n" + "=" * 55)
-print("Movies 변환  (VA-filtered sequences.pkl 기반)")
+print("Movies conversion  (based on VA-filtered sequences.pkl)")
 print("=" * 55)
 build_recbole_data(
     processed_dir="data/processed/movies_v10",

@@ -1,18 +1,18 @@
 """
 eda_idm_adm_v5.py
 =================
-IDM-ADM 독립성 가설 직접 검증
+Direct verification of the IDM-ADM independence hypothesis
 
-v4 대비 핵심 변경:
-  - 유저당 1개 → 모든 sliding window 쌍 (수만 개)
-  - Pearson r → KS test (분포 비교) + Mutual Information (비선형 관계)
-  - bin별 ADM 분포 boxplot
+Key changes from v4:
+  - One per user → all sliding window pairs (tens of thousands)
+  - Pearson r → KS test (distribution comparison) + Mutual Information (nonlinear)
+  - Boxplot of ADM distribution per IDM bin
 
-판정:
-  H₀ (motivation): IDM ⊥ ADM  → 각 IDM bin의 ADM 분포 동일
-  H₁ (의존):       IDM ↔ ADM  → bin별 ADM 분포 다름
+Decision:
+  H0 (motivation): IDM ⊥ ADM  → ADM distributions identical across IDM bins
+  H1 (dependent):  IDM ↔ ADM  → ADM distributions differ across bins
 
-사용법:
+Usage:
   python data_analysis/EDA/eda_idm_adm_v5.py \
       --sequences data/processed/cds/sequences.pkl \
       --item_va   data/processed/cds/item_va.json \
@@ -40,7 +40,7 @@ EXCLUDE_CATS = {
 
 
 def compute_pairs(sequences, item_va, item_cats, min_seq_len=3, max_pairs=100000):
-    """모든 sliding window 쌍 생성."""
+    """Build all sliding window pairs."""
     pairs = []
     n_skip_short = 0
     n_skip_no_cat = 0
@@ -77,14 +77,14 @@ def compute_pairs(sequences, item_va, item_cats, min_seq_len=3, max_pairs=100000
                 intersection = target_cats & seq_cats
                 idm = 1.0 - len(intersection) / len(target_cats)
 
-            # ADM (VA 기반) — sequences 포맷: (item_idx, ts, v, a, ...)
+            # ADM (VA-based) — sequence format: (item_idx, ts, v, a, ...)
             try:
                 v_seq = np.array([s[2] for s in input_seq])
                 a_seq = np.array([s[3] for s in input_seq])
                 target_v = target[2]
                 target_a = target[3]
             except (IndexError, TypeError):
-                # fallback: item_va에서 조회
+                # fallback: look up from item_va
                 va_list = []
                 for s in input_seq:
                     va_entry = item_va.get(str(s[0]))
@@ -122,10 +122,10 @@ def compute_pairs(sequences, item_va, item_cats, min_seq_len=3, max_pairs=100000
             })
 
             if len(pairs) >= max_pairs:
-                print(f"[Build] max_pairs={max_pairs} 도달")
+                print(f"[Build] max_pairs={max_pairs} reached")
                 return pairs
 
-    print(f"[Build] {len(pairs):,} 쌍  (short skip={n_skip_short}, no-cat skip={n_skip_no_cat})")
+    print(f"[Build] {len(pairs):,} pairs  (short skip={n_skip_short}, no-cat skip={n_skip_no_cat})")
     return pairs
 
 
@@ -137,7 +137,7 @@ def analyze(pairs, output_dir):
     adm_drift = np.array([p["adm_drift"] for p in pairs])
     adm_cong = np.array([p["adm_cong"] for p in pairs])
 
-    print(f"\n=== 기본 통계 ===")
+    print(f"\n=== Basic Statistics ===")
     print(f"n = {len(pairs):,}")
     print(f"IDM: mean={idm.mean():.3f}  std={idm.std():.3f}")
     print(f"     =0: {(idm == 0).mean()*100:.1f}%   "
@@ -145,7 +145,7 @@ def analyze(pairs, output_dir):
           f"mid: {((idm > 0) & (idm < 1)).mean()*100:.1f}%")
     print(f"ADM: mean={adm.mean():.3f}  std={adm.std():.3f}")
 
-    # ── 1. IDM bin별 ADM 분포 ──
+    # ── 1. ADM distribution per IDM bin ──
     bins = [(0.0, 0.001), (0.001, 0.5), (0.5, 0.999), (0.999, 1.001)]
     bin_labels = ["IDM=0\n(repeat/overlap)",
                   "0<IDM<0.5\n(partial)",
@@ -165,7 +165,7 @@ def analyze(pairs, output_dir):
             "adm_std": float(adm[mask].std()) if mask.sum() > 0 else None,
         })
 
-    print(f"\n=== Bin별 통계 ===")
+    print(f"\n=== Bin Statistics ===")
     for s in bin_stats:
         if s["n"] > 0:
             lbl = s["bin"].replace("\n", " ")
@@ -183,14 +183,14 @@ def analyze(pairs, output_dir):
         patch.set_facecolor(color)
         patch.set_alpha(0.7)
     ax.set_ylabel("ADM (affective drift)")
-    ax.set_title("ADM distribution across IDM bins\nH0: 독립이면 4 박스 동일")
+    ax.set_title("ADM distribution across IDM bins\nH0: if independent, all 4 boxes should be identical")
     plt.xticks(fontsize=9)
     plt.tight_layout()
     plt.savefig(f"{output_dir}/idm_bins_adm_boxplot.png", dpi=150, bbox_inches="tight")
     plt.close()
 
-    # ── 2. KS test (인접 bin) ──
-    print(f"\n=== KS test (인접 bin) ===")
+    # ── 2. KS test (adjacent bins) ──
+    print(f"\n=== KS test (adjacent bins) ===")
     ks_results = []
     for i in range(len(valid_data) - 1):
         if len(valid_data[i]) > 30 and len(valid_data[i + 1]) > 30:
@@ -209,9 +209,9 @@ def analyze(pairs, output_dir):
     if len(kw_data) >= 2:
         kw_stat, kw_p = kruskal(*kw_data)
         print(f"\n=== Kruskal-Wallis ===")
-        print(f"  H0: 모든 bin의 ADM 분포 동일")
+        print(f"  H0: ADM distributions are identical across all bins")
         print(f"  H={kw_stat:.3f}  p={kw_p:.2e}  "
-              f"{'reject (분포 다름)' if kw_p < 0.05 else 'fail to reject (분포 비슷)'}")
+              f"{'reject (distributions differ)' if kw_p < 0.05 else 'fail to reject (distributions similar)'}")
 
     # ── 4. Mutual Information ──
     print(f"\n=== Mutual Information ===")
@@ -220,11 +220,11 @@ def analyze(pairs, output_dir):
     idm_shuf = rng.permutation(idm)
     mi_base = mutual_info_regression(idm_shuf.reshape(-1, 1), adm, random_state=42)[0]
     print(f"  I(IDM; ADM)      = {mi:.4f}")
-    print(f"  I(shuffled; ADM) = {mi_base:.4f}  ← random baseline")
+    print(f"  I(shuffled; ADM) = {mi_base:.4f}  <- random baseline")
     print(f"  ratio            = {mi/max(mi_base, 1e-6):.2f}x")
 
-    # ── 5. ADM 두 항 분리 ──
-    print(f"\n=== ADM 두 항 분리 ===")
+    # ── 5. ADM term decomposition ──
+    print(f"\n=== ADM Term Decomposition ===")
     mi_drift = mutual_info_regression(idm.reshape(-1, 1), adm_drift, random_state=42)[0]
     mi_cong = mutual_info_regression(idm.reshape(-1, 1), adm_cong, random_state=42)[0]
     print(f"  drift term  : mean={adm_drift.mean():.3f}  I(IDM;drift) ={mi_drift:.4f}")
@@ -275,19 +275,19 @@ def analyze(pairs, output_dir):
     print(f"[Saved] {output_dir}/idm_bins_adm_boxplot.png")
     print(f"[Saved] {output_dir}/idm_adm_overview.png")
 
-    # 최종 판정
+    # Final verdict
     print(f"\n{'='*60}")
-    print(f"최종 판정")
+    print(f"Final Verdict")
     print(f"{'='*60}")
     si = summary["interpretation"]
     if si["mi_significant"] and si["kw_significant"]:
-        print(f"X IDM과 ADM이 독립이 아님 (둘 다 유의)")
-        print(f"   -> motivation 'IDM ⊥ ADM' 약함 -> 둘 중 하나 생략 가능")
+        print(f"X  IDM and ADM are NOT independent (both significant)")
+        print(f"   -> motivation 'IDM ⊥ ADM' is weak -> one may be redundant")
     elif not si["mi_significant"] and (si["kw_significant"] is False):
-        print(f"O IDM과 ADM은 통계적으로 독립")
-        print(f"   -> motivation 강하게 지지됨 -> 둘 다 필요")
+        print(f"O  IDM and ADM are statistically independent")
+        print(f"   -> motivation strongly supported -> both are needed")
     else:
-        print(f"~ 결과 mixed — 해석 필요")
+        print(f"~  Mixed results — interpretation required")
         print(f"   KS/KW sig: {si['kw_significant']}, MI sig: {si['mi_significant']}")
 
     return summary
@@ -321,7 +321,7 @@ def main():
                           max_pairs=args.max_pairs)
 
     if len(pairs) < 100:
-        print(f"[Error] 쌍이 너무 적음: {len(pairs)}")
+        print(f"[Error] too few pairs: {len(pairs)}")
         return
 
     analyze(pairs, args.output_dir)

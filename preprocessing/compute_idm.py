@@ -124,7 +124,7 @@ def compute_category_idm(
 
     if len(all_idm) > 0:
         print(f"[IDM] Statistics:")
-        print(f"      평균: {np.mean(all_idm):.4f}")
+        print(f"      mean: {np.mean(all_idm):.4f}")
         print(f"      std:  {np.std(all_idm):.4f}")
         print(f"      min:  {np.min(all_idm):.4f}")
         print(f"      max:  {np.max(all_idm):.4f}")

@@ -1,12 +1,12 @@
 """
-plot_va_cds.py
-==============
-emotion_results_cds.csv 캐시 기반으로 VA 시각화만 뽑는 스크립트
-- VA scatter (사분면별 색상)
-- VA Quadrant Distribution 바차트
+plot_va.py
+==========
+VA visualization script based on emotion_results.csv cache.
+- VA scatter (colored by quadrant)
+- VA Quadrant Distribution bar chart
 
-사용법:
-  python preprocessing/plot_va_cds.py \
+Usage:
+  python preprocessing/plot_va.py \
       --results_path data_analysis/results/emotion_results_cds.csv \
       --output_dir   data_analysis/results
 """
@@ -57,7 +57,7 @@ def plot_va_quadrant_bar(df, out_path):
     counts = df["quadrant"].value_counts()
     total  = counts.sum()
 
-    # 사분면 순서 고정
+    # fix quadrant order
     order  = list(QUADRANT_INFO.keys())
     values = [counts.get(q, 0) / total * 100 for q in order]
     colors = [QUADRANT_INFO[q]["color"] for q in order]
@@ -66,13 +66,13 @@ def plot_va_quadrant_bar(df, out_path):
     fig, ax = plt.subplots(figsize=(8, 5))
     bars = ax.bar(labels, values, color=colors, edgecolor="white", width=0.5)
 
-    # 수치 레이블
+    # value labels
     for bar, val in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + 0.5,
                 f"{val:.1f}%", ha="center", va="bottom", fontsize=10)
 
-    # Uniform 기준선
+    # uniform baseline
     ax.axhline(25, color="gray", lw=1.2, ls="--", label="Uniform (25%)")
     ax.set_ylabel("Proportion (%)", fontsize=10)
     ax.set_title("VA Quadrant Distribution (neutral excluded)", fontsize=11)
@@ -83,8 +83,8 @@ def plot_va_quadrant_bar(df, out_path):
     plt.close()
     print(f"[Plot] VA quadrant bar → {out_path}")
 
-    # 분포 출력
-    print("\n[VA Quadrant 분포]")
+    # distribution summary
+    print("\n[VA Quadrant Distribution]")
     for q, v in zip(order, values):
         print(f"  {q}: {v:.1f}%")
 
@@ -101,7 +101,7 @@ def main():
     print(f"[Load] {args.results_path}")
     df = pd.read_csv(args.results_path)
 
-    # quadrant 컬럼 없으면 계산
+    # compute quadrant column if missing
     if "quadrant" not in df.columns:
         df["quadrant"] = [get_quadrant(v, a)
                           for v, a in zip(df["valence"], df["arousal"])]

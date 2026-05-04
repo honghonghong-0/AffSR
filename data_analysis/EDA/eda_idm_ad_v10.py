@@ -1,21 +1,21 @@
 """
 data_analysis/EDA/eda_idm_ad_v10.py
 =====================================
-v10 기준 IDM vs AD 상관관계 분석
+IDM vs AD correlation analysis based on v10
 
-AD 정의 (v10):
-  va_long = EMA(dist28_seq) @ VA_MATRIX   (학습된 λ 사용)
-  AD      = ‖a_n - va_long‖₂
+AD definition (v10):
+  va_long = EMA(dist28_seq) @ VA_MATRIX   (using learned lambda)
+  AD      = ||a_n - va_long||_2
 
-IDM 정의:
+IDM definition:
   idm.pkl: {(user_idx, target_item_idx): float}
 
-방법:
-  - 학습된 best.pt checkpoint에서 AffDrift.forward() 호출
-  - test split 전체 유저에 대해 AD, IDM 추출
+Method:
+  - Call AffDrift.forward() from the trained best.pt checkpoint
+  - Extract AD and IDM for all users in the test split
   - Pearson r, Spearman r, KS test, Kruskal-Wallis, Mutual Information
 
-사용법:
+Usage:
   python data_analysis/EDA/eda_idm_ad_v10.py \
       --ckpt outputs/v10_final/affsr_full_movies/best.pt \
       --data_dir data/processed/movies_tv_2021_2023 \
@@ -45,7 +45,7 @@ from datasets.base_dataset import AffSRDataset
 from models.modules.affsr import AffSR
 
 
-# ── 스타일 ─────────────────────────────────────────────────────────────────
+# ── Style ─────────────────────────────────────────────────────────────────
 plt.rcParams.update({
     "font.family":      "DejaVu Sans",
     "axes.facecolor":   "white",
@@ -63,12 +63,12 @@ def load_model(ckpt_path: str, data_dir: str, device: torch.device):
     model.load_state_dict(state["model"] if "model" in state else state)
     model.to(device).eval()
     lam = torch.nn.functional.softplus(model.affdrift.lambda_raw).item()
-    print(f"  학습된 EMA λ = {lam:.4f}")
+    print(f"  Learned EMA lambda = {lam:.4f}")
     return model
 
 
 def extract_ad_idm(model, data_dir: str, device: torch.device):
-    """test split 전체에서 AD, IDM 추출."""
+    """Extract AD and IDM from the entire test split."""
     with open(Path(data_dir) / "idm.pkl", "rb") as f:
         idm_map = pickle.load(f)   # {(user_idx, item_idx): float}
 
@@ -96,7 +96,7 @@ def extract_ad_idm(model, data_dir: str, device: torch.device):
 
     ad  = np.array(ad_list)
     idm = np.array(idm_list)
-    print(f"  추출: {len(ad):,}쌍  (IDM 매칭 성공)")
+    print(f"  Extracted: {len(ad):,} pairs  (IDM match succeeded)")
     print(f"  AD:  mean={ad.mean():.4f}  std={ad.std():.4f}  "
           f"min={ad.min():.4f}  max={ad.max():.4f}")
     print(f"  IDM: mean={idm.mean():.4f}  std={idm.std():.4f}  "
@@ -107,14 +107,14 @@ def extract_ad_idm(model, data_dir: str, device: torch.device):
 def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # ── 1. 기본 상관 ──────────────────────────────────────────────────
+    # ── 1. Basic correlation ──────────────────────────────────────────────────
     pr, pp = pearsonr(idm, ad)
     sr, sp = spearmanr(idm, ad)
-    print(f"\n=== 상관계수 ===")
+    print(f"\n=== Correlation Coefficients ===")
     print(f"  Pearson  r={pr:.4f}  p={pp:.2e}")
     print(f"  Spearman r={sr:.4f}  p={sp:.2e}")
 
-    # ── 2. IDM bin별 AD 분포 (boxplot) ───────────────────────────────
+    # ── 2. AD distribution per IDM bin (boxplot) ───────────────────────────────
     bins       = [(0.0, 0.001), (0.001, 0.5), (0.5, 0.999), (0.999, 1.001)]
     bin_labels = ["IDM=0\n(repeat)", "0<IDM<0.5\n(partial)",
                   "0.5≤IDM<1\n(mostly new)", "IDM=1\n(full drift)"]
@@ -130,7 +130,7 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
             "ad_std":  float(ad[mask].std())  if n > 0 else None,
         })
 
-    print(f"\n=== IDM bin별 AD 통계 ===")
+    print(f"\n=== AD statistics by IDM bin ===")
     for s in bin_stats:
         if s["n"] > 0:
             print(f"  {s['bin']:30} n={s['n']:6,} ({s['pct']:5.1f}%)  "
@@ -144,7 +144,7 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
     colors = ["#6B8CBA", "#52B788", "#E8A838", "#E85252"]
     for patch, color in zip(bp["boxes"], colors[:len(valid_data)]):
         patch.set_facecolor(color); patch.set_alpha(0.7)
-    ax.set_ylabel("AD  (‖a_n − va_long‖₂)", fontsize=11)
+    ax.set_ylabel("AD  (||a_n - va_long||_2)", fontsize=11)
     ax.set_title(f"AD distribution across IDM bins\n"
                  f"Pearson r={pr:.3f}  Spearman r={sr:.3f}", fontsize=11)
     plt.tight_layout()
@@ -152,8 +152,8 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
     plt.savefig(bp_path, dpi=150, bbox_inches="tight")
     plt.close()
 
-    # ── 3. KS test (인접 bin) ────────────────────────────────────────
-    print(f"\n=== KS test (인접 bin) ===")
+    # ── 3. KS test (adjacent bins) ────────────────────────────────────────
+    print(f"\n=== KS test (adjacent bins) ===")
     ks_results = []
     for i in range(len(valid_data) - 1):
         if len(valid_data[i]) > 30 and len(valid_data[i+1]) > 30:
@@ -173,7 +173,7 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
         kw_stat, kw_p = kruskal(*kw_data)
         print(f"\n=== Kruskal-Wallis ===")
         print(f"  H={kw_stat:.3f}  p={kw_p:.2e}  "
-              f"{'reject (분포 다름)' if kw_p < 0.05 else 'fail to reject'}")
+              f"{'reject (distributions differ)' if kw_p < 0.05 else 'fail to reject'}")
 
     # ── 5. Mutual Information ─────────────────────────────────────────
     mi = mutual_info_regression(idm.reshape(-1, 1), ad, random_state=42)[0]
@@ -182,7 +182,7 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
         rng.permutation(idm).reshape(-1, 1), ad, random_state=42)[0]
     print(f"\n=== Mutual Information ===")
     print(f"  I(IDM; AD)        = {mi:.4f}")
-    print(f"  I(shuffled; AD)   = {mi_base:.4f}  ← random baseline")
+    print(f"  I(shuffled; AD)   = {mi_base:.4f}  <- random baseline")
     print(f"  ratio             = {mi / max(mi_base, 1e-6):.2f}x")
 
     # ── 6. Scatter ────────────────────────────────────────────────────
@@ -191,9 +191,9 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
     idx = np.random.default_rng(0).choice(len(idm), n_plot, replace=False)
     axes[0].scatter(idm[idx], ad[idx], alpha=0.2, s=8, color="#4393C3")
     axes[0].set_xlabel("IDM", fontsize=11)
-    axes[0].set_ylabel("AD  (‖a_n − va_long‖₂)", fontsize=11)
+    axes[0].set_ylabel("AD  (||a_n - va_long||_2)", fontsize=11)
     axes[0].set_title(f"IDM vs AD  (n={n_plot:,} subsampled)\n"
-                      f"r={pr:.3f}  ρ={sr:.3f}", fontsize=10)
+                      f"r={pr:.3f}  rho={sr:.3f}", fontsize=10)
     axes[1].hist(ad, bins=30, color="#D6604D", edgecolor="white", alpha=0.85)
     axes[1].set_xlabel("AD", fontsize=11)
     axes[1].set_ylabel("Count", fontsize=11)
@@ -240,19 +240,19 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
     print(f"[Saved] {bp_path}")
     print(f"[Saved] {sc_path}")
 
-    # ── 최종 판정 ─────────────────────────────────────────────────────
+    # ── Final verdict ─────────────────────────────────────────────────────
     si = summary["interpretation"]
     print(f"\n{'='*55}")
-    print("최종 판정  (IDM ⊥ AD 가설)")
+    print("Final Verdict  (IDM ⊥ AD hypothesis)")
     print(f"{'='*55}")
     if not si["mi_significant"] and not si["kw_significant"]:
-        print("O  IDM과 AD 통계적으로 독립")
-        print("   → motivation 강하게 지지됨: 둘 다 필요")
+        print("O  IDM and AD are statistically independent")
+        print("   -> motivation strongly supported: both are needed")
     elif si["mi_significant"] and si["kw_significant"]:
-        print("X  IDM과 AD 독립이 아님 (둘 다 유의)")
-        print("   → motivation 약함: 한 쪽 재검토 필요")
+        print("X  IDM and AD are NOT independent (both significant)")
+        print("   -> motivation weak: one side needs re-examination")
     else:
-        print("~  결과 mixed")
+        print("~  Mixed results")
         print(f"   KW sig={si['kw_significant']}, MI sig={si['mi_significant']}")
 
     return summary
@@ -261,7 +261,7 @@ def analyze(ad: np.ndarray, idm: np.ndarray, output_dir: str):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt",       required=True,
-                    help="best.pt 경로 (affsr_full_movies 또는 affsr_full_cds)")
+                    help="path to best.pt checkpoint (affsr_full_movies or affsr_full_cds)")
     ap.add_argument("--data_dir",   required=True)
     ap.add_argument("--output_dir", required=True)
     args = ap.parse_args()
@@ -269,13 +269,13 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    print(f"\n[1] 모델 로드: {args.ckpt}")
+    print(f"\n[1] Loading model: {args.ckpt}")
     model = load_model(args.ckpt, args.data_dir, device)
 
-    print(f"\n[2] AD / IDM 추출...")
+    print(f"\n[2] Extracting AD / IDM...")
     ad, idm = extract_ad_idm(model, args.data_dir, device)
 
-    print(f"\n[3] 상관관계 분석...")
+    print(f"\n[3] Correlation analysis...")
     analyze(ad, idm, args.output_dir)
 
 
