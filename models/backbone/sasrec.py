@@ -255,7 +255,6 @@ class SASRec(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
-    # ── Compatibility property: referenced as item_emb in models/modules/affsr.py etc. ──
     @property
     def item_emb(self) -> nn.Embedding:
         return self.item_embedding
@@ -312,13 +311,3 @@ class SASRec(nn.Module):
 
     def get_item_embeddings(self, item_ids: torch.Tensor) -> torch.Tensor:
         return self.item_embedding(item_ids)
-
-
-if __name__ == "__main__":
-    # simple sanity check
-    model = SASRec(num_items=1000, d_model=64, n_heads=2, n_layers=2, max_seq_len=50, dropout=0.2)
-    item_seq = torch.zeros(4, 50, dtype=torch.long)
-    item_seq[:, -10:] = torch.randint(1, 1001, (4, 10))
-    seq_mask = item_seq > 0
-    r_u = model(item_seq, seq_mask)
-    print(f"r_u: {r_u.shape}, nan: {torch.isnan(r_u).any()}")

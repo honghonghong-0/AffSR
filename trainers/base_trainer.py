@@ -145,12 +145,8 @@ class AffSRTrainer:
                     all_item_va=self.all_item_va,
                 )  # (B, N)
                 if torch.isnan(all_scores).any():
-                    print(f"[Batch {batch_idx}] all_scores contains NaN"); continue
+                    continue
                 l_rec = F.cross_entropy(all_scores, batch["target"])
-                loss_val = l_rec.item()
-                if batch_idx == 0:
-                    print(f"\n[Epoch Debug - First Batch]")
-                    print(f"  full_ce loss={loss_val:.8f}")
                 loss_dict = {"loss": l_rec, "l_rec": l_rec, "l_disen": torch.tensor(0.0)}
             else:
                 # ── Sampled CE (original) ───────────────────────────────
@@ -165,7 +161,7 @@ class AffSRTrainer:
                 )
                 score_pos = out["score"]
                 if torch.isnan(score_pos).any():
-                    print(f"[Batch {batch_idx}] score_pos contains NaN"); continue
+                    continue
 
                 neg_items = batch["neg_items"]
                 score_neg = self.model.score_neg_batch(
@@ -174,7 +170,7 @@ class AffSRTrainer:
                     neg_ids=neg_items,
                 )
                 if torch.isnan(score_neg).any():
-                    print(f"[Batch {batch_idx}] score_neg contains NaN"); continue
+                    continue
 
                 loss_dict = self.criterion(
                     score_pos=score_pos,
@@ -183,46 +179,7 @@ class AffSRTrainer:
                     beta=out["beta"],
                 )
                 if torch.isnan(loss_dict["loss"]):
-                    print(f"[Batch {batch_idx}] loss NaN"); continue
-
-                if batch_idx == 0:
-                    loss_val = loss_dict["loss"].item()
-                    print(f"\n[Epoch Debug - First Batch]")
-                    print(f"  score_pos: mean={score_pos.mean():.6f}, range=[{score_pos.min():.4f}, {score_pos.max():.4f}]")
-                    print(f"  score_neg: mean={score_neg.mean():.6f}, range=[{score_neg.min():.4f}, {score_neg.max():.4f}]")
-                    neg_flat = score_neg.reshape(score_neg.size(0), -1)
-                    print(f"  score diff: {(score_pos.unsqueeze(-1) - neg_flat).mean():.6f}")
-                    print(f"  l_rec={loss_dict['l_rec'].item():.8f}, l_disen={loss_dict['l_disen'].item():.8f}")
-                    print(f"  total_loss={loss_val:.8f}")
-
-                if not self.full_ce:
-                    # [Sanity check 2] Verify train forward and eval forward consistency
-                    was_training = self.model.training
-                    self.model.eval()
-                    with torch.no_grad():
-                        scores_eval = self.model.predict(
-                            item_seq=batch["item_seq"][:4],
-                            seq_mask=batch["seq_mask"][:4],
-                            a_n=batch["a_n"][:4],
-                            dist28_seq=batch["dist28_seq"][:4],
-                            idm=batch["idm"][:4],
-                            all_item_va=self.all_item_va,
-                        )
-                        targets = batch["target"][:4]
-                        tgt_scores = scores_eval[torch.arange(4, device=self.device), targets]
-                        print(f"\n[Sanity check 2] train/eval forward comparison")
-                        print(f"  target indices      : {targets.tolist()}")
-                        print(f"  target score        : {[round(x, 4) for x in tgt_scores.tolist()]}")
-                        print(f"  overall score mean/std : {scores_eval.mean().item():.4f} / {scores_eval.std().item():.4f}")
-                        ranks = [
-                            (scores_eval[i] > scores_eval[i, targets[i]]).sum().item()
-                            for i in range(4)
-                        ]
-                        print(f"  target rank (0=1st, N={scores_eval.size(1)}): {ranks}")
-                        print(f"  train score_pos[:4] : {[round(x, 4) for x in score_pos[:4].tolist()]}")
-                    if was_training:
-                        self.model.train()
-                    print()
+                    continue
 
             self.optimizer.zero_grad()
             loss_dict["loss"].backward()

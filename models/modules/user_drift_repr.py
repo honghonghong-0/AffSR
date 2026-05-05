@@ -1,13 +1,13 @@
 """
 models/modules/user_drift_repr.py
 ==================================
-User Drift Representation Generator — v8 Main Contribution 1
+User Drift Representation Generator
 
 Role:
   Reinterprets IDURL's DRG (Drift Representation Generation) structure
   for VA quadrants.
   While IDURL generates K representations via IDM discretization (hard routing),
-  v8 uses βₖ (soft routing) to generate K representations.
+  this module uses βₖ (soft routing) to generate K representations.
 
 Formulas:
   Fₖ(x) = LN(Dropout(x + Linear_k(x)))

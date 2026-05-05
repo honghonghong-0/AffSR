@@ -1,7 +1,7 @@
 """
 datasets/base_dataset.py
 ========================
-Dataset class for AffSR model (v10)
+Dataset class for AffSR model
 
 Input files:
   - splits/train.pkl  : {user_idx: [(item_idx, v, a), ...]}
@@ -189,8 +189,8 @@ class AffSRDataset(Dataset):
 
         pad_len = self.max_seq_len - L
         for i, item_tuple in enumerate(input_seq):
-            # cds_v10:    (item_idx, v, a, dist28)           → dist28 at index 3
-            # movies_v10: (item_idx, v, a, has_va, dist28)   → dist28 at index 4
+            # cds:    (item_idx, v, a, dist28)           → dist28 at index 3
+            # movies: (item_idx, v, a, has_va, dist28)   → dist28 at index 4
             item_i, v_i, a_i = item_tuple[0], item_tuple[1], item_tuple[2]
             item_seq[pad_len + i] = item_i
             va_seq[pad_len + i]   = [v_i, a_i]

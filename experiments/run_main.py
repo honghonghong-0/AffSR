@@ -57,19 +57,6 @@ def build_all_item_va(dataset: AffSRDataset, num_items: int) -> torch.Tensor:
     for item_idx, va_arr in dataset.item_va.items():
         if item_idx <= num_items:
             va[item_idx] = torch.from_numpy(va_arr)
-
-    # [Sanity check 1] Verify index alignment
-    item_va_keys = list(dataset.item_va.keys())
-    sample_targets = [s["target_idx"] for s in dataset.samples[:5]]
-    print(f"\n[Sanity check 1] Index range verification")
-    print(f"  all_item_va shape         : {tuple(va.shape)}  (expected ({num_items+1}, 2))")
-    print(f"  num_items                 : {num_items}")
-    print(f"  item_va keys range        : [{min(item_va_keys)}, {max(item_va_keys)}]")
-    print(f"  item_va keys sample       : {sorted(item_va_keys)[:5]}")
-    print(f"  target sample (train[:5]) : {sample_targets}")
-    nonzero_count = (va.norm(dim=-1) > 0).sum().item()
-    print(f"  va nonzero entries        : {nonzero_count} / {va.size(0)}")
-    print()
     return va
 
 
@@ -92,7 +79,7 @@ def main():
     # Training
     parser.add_argument("--epochs",       type=int,   default=200)
     parser.add_argument("--batch_size",   type=int,   default=128)
-    parser.add_argument("--lr",           type=float, default=1e-5)  # lowered from 5e-5 to 1e-5
+    parser.add_argument("--lr",           type=float, default=1e-5)
     parser.add_argument("--weight_decay", type=float, default=1e-4)
     parser.add_argument("--num_neg",      type=int,   default=50)
     parser.add_argument("--patience",     type=int,   default=10)
@@ -107,7 +94,7 @@ def main():
     parser.add_argument("--device",  type=str, default="cuda")
     parser.add_argument("--save_dir",type=str, default="outputs/checkpoints")
 
-    # Ablation (v8)
+    # Ablation
     parser.add_argument(
         "--baseline_only", action="store_true",
         help="SASRec standalone baseline (skip all affective modules)",
@@ -180,7 +167,7 @@ def main():
     # ── Full item VA ──────────────────────────────────────────────────
     all_item_va = build_all_item_va(train_ds, train_ds.num_items)
 
-    # ── Model (v8) ────────────────────────────────────────────────────
+    # ── Model ────────────────────────────────────────────────────────
     model = AffSR(
         num_items=train_ds.num_items,
         d_model=args.d_model,

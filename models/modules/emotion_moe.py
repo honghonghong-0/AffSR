@@ -1,11 +1,10 @@
 """
 models/modules/emotion_moe.py
 =============================
-Affective MoE module — Main Contribution 2
+Affective MoE module
 
 Role:
   Transforms **item ID embeddings** per quadrant based on current emotion state (βₖ).
-  (v7: input changed from VA 2-dim to ID embedding d-dim for better item discriminability)
 
 Formula:
   e_final = Σₖ βₖ · (Eₖ(e_id) + W_ck · cₖ)

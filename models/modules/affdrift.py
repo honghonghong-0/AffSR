@@ -1,7 +1,7 @@
 """
 models/modules/affdrift.py
 ==========================
-AffDrift module — v10
+AffDrift module
 
 Role:
   1. Compute EMA long-term emotion: dist28_seq → h_long (28-dim) → va_long (2-dim)
@@ -78,7 +78,7 @@ NEUTRAL_IDX = 27  # neutral is the last index
 
 class AffDrift(nn.Module):
     """
-    AffDrift v10 module.
+    AffDrift module.
 
     Args:
         K          : number of quadrants (default 4)

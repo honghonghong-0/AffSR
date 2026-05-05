@@ -1,13 +1,7 @@
 """
 models/modules/affsr_nopenalty.py
 =======================
-AffSR v10 integrated model (no λ_mc penalty variant)
-
-Changes from v9 to v10:
-  - AffDrift: separates EMA long-term emotion (va_long) and short-term emotion (aₙ)
-  - β_final = (1-α)·βₖ(va_long) + α·βₖ(aₙ)
-  - Added dist28_seq (B, L, 28) input; removed a_bar_u
-  - Removed user Fₖ transform (UserDriftRepr) — r̄ᵤ = rᵤ used directly
+AffSR integrated model (no λ_mc penalty variant)
 
 Overall flow:
   [Encoding]  item_seq → SASRec → rᵤ
@@ -35,7 +29,7 @@ from models.modules.cross_attention import BidirectionalCrossAttention
 
 class AffSR(nn.Module):
     """
-    AffSR v10 (no penalty variant).
+    AffSR (no penalty variant).
 
     Args:
         num_items     : total number of items
@@ -88,7 +82,6 @@ class AffSR(nn.Module):
 
         self.affdrift = AffDrift(K=K, tau=tau, no_long=no_long, no_short=no_short, no_ad=no_ad)
 
-        # Main Contribution — affective MoE on the item side
         self.moe = EmotionMoE(d_model=d_model, K=K)
 
         self.cross_attn = BidirectionalCrossAttention(
@@ -119,7 +112,6 @@ class AffSR(nn.Module):
     def _user_repr(
         self, r_u: torch.Tensor, beta: torch.Tensor,
     ) -> torch.Tensor:
-        """v10: Fₖ transform removed — rᵤ used as-is."""
         return r_u
 
     def _item_repr(
